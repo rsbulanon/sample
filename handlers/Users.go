@@ -45,7 +45,7 @@ func (handler UserHandler) Index(c *gin.Context) {
 	fmt.Printf("offset ---> %d max ---> %d\n", start, max)
 	users := []m.User{}
 	collection := handler.sess.DB("sampledb").C("users") 
-	collection.Find(nil).All(&users)
+	collection.Find(nil).Select(bson.M{"password": 0}).All(&users)
 	c.JSON(http.StatusOK, users)
 }
 
