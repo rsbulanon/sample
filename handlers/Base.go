@@ -3,15 +3,16 @@ package handlers
 import (
 	"net/http"
 	"fmt"
-	
+
 	"github.com/gin-gonic/gin"
 )
 
-func respondWithError(code int, message string, c *gin.Context) {
-	resp := map[string]string{"error": message}
-
-	c.JSON(code, resp)
-	c.AbortWithStatus(code)
+func respond(statusCode int, responseMessage string, c *gin.Context, isError bool) {
+	response := &Response{Message: responseMessage}
+	c.JSON(statusCode,response)
+	if isError {
+		c.AbortWithStatus(statusCode)		
+	}
 }
 
 
@@ -21,9 +22,13 @@ func jwtVerifier() gin.HandlerFunc {
 		appToken := c.Request.Header.Get("Authorization")
 
 		if appToken == "" {
-			respondWithError(http.StatusForbidden, "Authorization header is required", c)
+			respond(http.StatusForbidden, "Authorization header is required", c, true)
 		} else {
-			respondWithError(http.StatusBadRequest, fmt.Sprintf("Invalid token: %s", appToken), c)
+			respond(http.StatusBadRequest, fmt.Sprintf("Invalid token: %s", appToken), c, true)
 		}
 	}
+}
+
+type Response struct {
+	Message string `json:"message"`
 }

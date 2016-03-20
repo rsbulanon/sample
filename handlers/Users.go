@@ -5,13 +5,14 @@ import (
 	"strconv"
 	"fmt"
 	"time"
+	"crypto/md5"
+	"encoding/hex"
 
 	"github.com/gin-gonic/gin"
 	m "test/sample/api/models"
 	"gopkg.in/mgo.v2"	
 	"gopkg.in/mgo.v2/bson"	
 	"github.com/dgrijalva/jwt-go"
-	"golang.org/x/crypto/bcrypt"
 	"github.com/satori/go.uuid"
 )
 
@@ -49,12 +50,35 @@ func (handler UserHandler) Index(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
-// Show retrieves a user record with filters
-func (handler UserHandler) Show(c *gin.Context) {
-	//id := c.Param("id")
-	user := []m.User{}
-	//handler.db.Where("deleted_at is null AND status = ? AND ID = ?","active",id).Order("created_at desc").Limit(20).Find(&user)
-	c.JSON(http.StatusOK, user)
+// Authenticate user
+func (handler UserHandler) Auth(c *gin.Context) {
+	auth := m.Auth{}
+	c.BindJSON(&auth)
+
+	collection := handler.sess.DB("sampledb").C("users") 
+	result := m.User{}
+	error := collection.Find(bson.M{"email": auth.Email}).One(&result)
+	if fmt.Sprintf("%s", error) == "not found" {
+		respond(http.StatusBadRequest,"Account not found",c,true)
+	} else {
+		hasher := md5.New()
+    	hasher.Write([]byte(auth.Password))
+		if result.Password == hex.EncodeToString(hasher.Sum(nil)) {
+		    // Create the token
+		    token := jwt.New(jwt.SigningMethodHS256)
+		    token.Claims["id"] = result.ID
+		    token.Claims["iat"] = time.Now().Unix()
+		    token.Claims["exp"] = time.Now().Add(time.Second * 3600 * 24).Unix()
+		    tokenString, err := token.SignedString([]byte("secret"))
+		    if err == nil {
+				respond(http.StatusCreated,tokenString,c,false)
+	    	} else {
+				respond(http.StatusBadRequest,"Failed to create token",c,true)
+			}
+		} else {
+			respond(http.StatusBadRequest,"Invalid password",c,true)
+		}
+	}
 }
 
 // Create an appointment
@@ -67,32 +91,29 @@ func (handler UserHandler) Create(c *gin.Context) {
 	//check if email is not existing
 	if fmt.Sprintf("%s", err) == "not found" {
 		// generate hashed password
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
-		if err == nil {
-			user.ID = fmt.Sprintf("%s", uuid.NewV4())
-			user.CreatedAt = time.Now().UTC()
-			user.UpdatedAt = time.Now().UTC()
-			user.Password = string(hashedPassword)
-			collection.Insert(&user)
-		    // Create the token
-		    token := jwt.New(jwt.SigningMethodHS256)
-		    token.Claims["id"] = user.ID
-		    token.Claims["iat"] = time.Now().Unix()
-		    token.Claims["exp"] = time.Now().Add(time.Second * 3600 * 24).Unix()
-		    tokenString, err := token.SignedString([]byte("secret"))
-		    if err == nil {
-	    		resp := map[string]string{"token": tokenString}
-				c.JSON(http.StatusCreated,resp)	
-	    	} else {
-    			fmt.Println("failed to create token --->",err)
-				respondWithError(http.StatusBadRequest,"Failed to create account",c)
-	    	}
-		} else {
-			fmt.Println("failed to encrypt password",err)
-		}
+		user.ID = fmt.Sprintf("%s", uuid.NewV4())
+		user.CreatedAt = time.Now().UTC()
+		user.UpdatedAt = time.Now().UTC()
+		user.Status = "active"
+		hasher := md5.New()
+    	hasher.Write([]byte(user.Password))
+		user.Password = hex.EncodeToString(hasher.Sum(nil))
+		collection.Insert(&user)
+	    // Create the token
+	    token := jwt.New(jwt.SigningMethodHS256)
+	    token.Claims["id"] = user.ID
+	    token.Claims["iat"] = time.Now().Unix()
+	    token.Claims["exp"] = time.Now().Add(time.Second * 3600 * 24).Unix()
+	    tokenString, err := token.SignedString([]byte("secret"))
+	    if err == nil {
+			respond(http.StatusCreated,tokenString,c,false)
+    	} else {
+			fmt.Println("failed to create token --->",err)
+			respond(http.StatusBadRequest,"Failed to create account",c,true)
+    	}
 	} else {
 		fmt.Println("email existing")
-		respondWithError(http.StatusBadRequest,"Email already taken",c)
+		respond(http.StatusBadRequest,"Email already taken",c,true)
 	}
 }
 
