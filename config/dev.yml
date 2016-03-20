@@ -1,5 +1,1 @@
-DB_HOST: "localhost"
-DB_PORT: 23306
-DB_USER: "rsbulanon"
-DB_PASS: "Passw0rd"
-DB_NAME: "sampledb"
+DB_URL : "mongodb://localhost/sampledb"

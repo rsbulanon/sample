@@ -3,10 +3,12 @@ package main
 import (
 	"os"
 	"fmt"
+
 	 "github.com/gin-gonic/gin"
 	 _ "github.com/go-sql-driver/mysql"
 	 h "test/sample/api/handlers"
 	 "gopkg.in/mgo.v2"
+	 "test/sample/api/config"
 )
 
 func main() {
@@ -30,8 +32,7 @@ func LoadAPIRoutes(r *gin.Engine, db *mgo.Session) {
 }
 
 func InitDB() *mgo.Session {
-	sess, err := mgo.Dial("mongodb://rsbulanon:Passw0rd@ds019829.mlab.com:19829/sampledb")
-	//sess, err := mgo.Dial("mongodb://localhost/sampledb")
+	sess, err := mgo.Dial(config.GetString("DB_URL"))
 	if err != nil {
 		panic(fmt.Sprintf("Error connecting to the database:  %s", err))
 	}
@@ -45,30 +46,6 @@ func InitDB() *mgo.Session {
 	//_db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&m.User{})
 
 	return sess
-}
-
-func jwtVerifier() gin.HandlerFunc {
-	return func(c *gin.Context) {
-
-		appToken := c.Request.Header.Get("Authorization")
-
-		if appToken == "" {
-			respondWithError(http.StatusForbidden, "Authorization header is required", c)
-		} else {
-			validAppTokens := config.GetStringMap("APP_TOKENS")
-			log.Printf("\n-- AppTokens: %s --\n", validAppTokens)
-			matched := false
-			for _, v := range validAppTokens {
-				if v == appToken {
-					matched = true
-					c.Next()
-				}
-			}
-			if !matched {
-				respondWithError(http.StatusBadRequest, fmt.Sprintf("Invalid token: %s", appToken), c)
-			}
-		}
-	}
 }
 
 func GetPort() string {
