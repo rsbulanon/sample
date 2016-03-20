@@ -8,7 +8,7 @@ import (
 	 _ "github.com/go-sql-driver/mysql"
 	 h "test/sample/api/handlers"
 	 "gopkg.in/mgo.v2"
-	 "test/sample/api/config"
+	 //"test/sample/api/config"
 )
 
 func main() {
