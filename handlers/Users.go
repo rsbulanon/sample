@@ -4,13 +4,15 @@ import (
 	"net/http"
 	"strconv"
 	"fmt"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	//"github.com/jinzhu/gorm"
 	m "test/sample/api/models"
-	 "gopkg.in/mgo.v2"	
-	//"github.com/dgrijalva/jwt-go"
-	//"golang.org/x/crypto/bcrypt"
+	"gopkg.in/mgo.v2"	
+	"gopkg.in/mgo.v2/bson"	
+	"github.com/dgrijalva/jwt-go"
+	"golang.org/x/crypto/bcrypt"
+	"github.com/satori/go.uuid"
 )
 
 type UserHandler struct {
@@ -42,7 +44,8 @@ func (handler UserHandler) Index(c *gin.Context) {
 
 	fmt.Printf("offset ---> %d max ---> %d\n", start, max)
 	users := []m.User{}
-	//handler.db.Where("deleted_at is null AND status = ?","active").Limit(max).Offset(start).Order("created_at desc").Find(&users)
+	collection := handler.sess.DB("sampledb").C("users") 
+	collection.Find(nil).All(&users)
 	c.JSON(http.StatusOK, users)
 }
 
@@ -58,21 +61,40 @@ func (handler UserHandler) Show(c *gin.Context) {
 func (handler UserHandler) Create(c *gin.Context) {
 	user := m.User{}
 	c.BindJSON(&user)
-
+	collection := handler.sess.DB("sampledb").C("users") 
+	result := m.User{}
+	err := collection.Find(bson.M{"email": user.Email}).One(&result)
 	//check if email is not existing
-	handler.sess.DB("sampledb").C("users").Insert(user)
-	c.JSON(http.StatusCreated,&user)
+	if fmt.Sprintf("%s", err) == "not found" {
+		// generate hashed password
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+		if err == nil {
+			user.ID = fmt.Sprintf("%s", uuid.NewV4())
+			user.CreatedAt = time.Now().UTC()
+			user.UpdatedAt = time.Now().UTC()
+			user.Password = string(hashedPassword)
+			collection.Insert(&user)
+		    // Create the token
+		    token := jwt.New(jwt.SigningMethodHS256)
+		    token.Claims["id"] = user.ID
+		    token.Claims["iat"] = time.Now().Unix()
+		    token.Claims["exp"] = time.Now().Add(time.Second * 3600 * 24).Unix()
+		    tokenString, err := token.SignedString([]byte("secret"))
+		    if err == nil {
+	    		resp := map[string]string{"token": tokenString}
+				c.JSON(http.StatusCreated,resp)	
+	    	} else {
+    			fmt.Println("failed to create token --->",err)
+				respondWithError(http.StatusBadRequest,"Failed to create account",c)
+	    	}
+		} else {
+			fmt.Println("failed to encrypt password",err)
+		}
+	} else {
+		fmt.Println("email existing")
+		respondWithError(http.StatusBadRequest,"Email already taken",c)
+	}
 }
-
-func respondWithError(code int, message string, c *gin.Context) {
-	resp := map[string]string{"error": message}
-
-	c.JSON(code, resp)
-	c.AbortWithStatus(code)
-}
-
-
-
 
 
 
