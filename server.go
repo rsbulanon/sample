@@ -1,12 +1,12 @@
 package main
 
 import (
+	"os"
 	"fmt"
 	 "github.com/gin-gonic/gin"
-	 "github.com/jinzhu/gorm"
 	 _ "github.com/go-sql-driver/mysql"
-	 m "test/sample/api/models"
 	 h "test/sample/api/handlers"
+	 "gopkg.in/mgo.v2"
 )
 
 func main() {
@@ -15,27 +15,44 @@ func main() {
 	LoadAPIRoutes(router, &db)
 }
 
-func LoadAPIRoutes(r *gin.Engine, db *gorm.DB) {
+func LoadAPIRoutes(r *gin.Engine, db *mgo.Session) {
 	public := r.Group("/api/v1")
 
 	userHandler := h.NewUserHandler(db)
 	public.GET("/users", userHandler.Index)
 	public.POST("/users", userHandler.Create)
-	r.Run(":8080")
+	var port = os.Getenv("PORT")
+	if port == "" {
+		port = "9000"
+	}
+	fmt.Println("PORT ---> ",port)
+	r.Run(fmt.Sprintf(":%s", port))
 }
 
-func InitDB() *gorm.DB {
-	_db, err := gorm.Open("mysql", "root:@/sampledb?charset=utf8&parseTime=True&loc=Local")
+func InitDB() *mgo.Session {
+	sess, err := mgo.Dial("mongodb://rsbulanon:Passw0rd@ds019829.mlab.com:19829/sampledb")
 	if err != nil {
 		panic(fmt.Sprintf("Error connecting to the database:  %s", err))
 	}
-	_db.DB()
+	sess.SetSafe(&mgo.Safe{})
+	//_db.DB()
 	//_db.LogMode(true)
 	//_db.DB().Ping()
 	//_db.DB().SetMaxIdleConns(10)
 	//_db.DB().SetMaxOpenConns(100)
 
-	_db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&m.User{})
+	//_db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&m.User{})
 
-	return &_db
+	return sess
+}
+
+func GetPort() string {
+    var port = os.Getenv("PORT")
+    // Set a default port if there is nothing in the environment
+    if port == "" {
+        port = "8000"
+        fmt.Println("INFO: No PORT environment variable detected, defaulting to " + port)
+    }
+    fmt.Println("port -----> ", port)
+    return ":" + port
 }
